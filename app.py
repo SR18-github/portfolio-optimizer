@@ -78,11 +78,12 @@ st.divider()
 
 # --- Settings ---
 st.subheader("⚙️ Settings")
+st.caption("📅 Please enter a start and end date for your portfolio analysis.")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    start_date = st.date_input("Start Date", value=pd.to_datetime("2022-01-01"))
+    start_date = st.date_input("Start Date 📅", value=None, placeholder="Select a start date...")
 with col2:
-    end_date = st.date_input("End Date", value=pd.to_datetime("2024-01-01"))
+    end_date = st.date_input("End Date 📅", value=None, placeholder="Select an end date...")
 with col3:
     num_portfolios = st.slider("Simulated Portfolios", 1000, 10000, 5000, 500)
 with col4:
@@ -98,6 +99,11 @@ run_button = st.button(
     use_container_width=True,
     disabled=len(st.session_state.selected_tickers) < 2
 )
+
+if not start_date or not end_date:
+    st.caption("⚠️ Please select both a start and end date.")
+elif len(st.session_state.selected_tickers) < 2:
+    st.caption("⚠️ Add at least 2 assets to run optimization.")
 
 if len(st.session_state.selected_tickers) < 2:
     st.caption("⚠️ Add at least 2 assets to run optimization.")
