@@ -123,6 +123,11 @@ if run_button:
             st.error(f"Something went wrong: {e}")
             st.info("Double-check your ticker symbols and date range.")
 
+if start_date and end_date:
+    date_diff = (end_date - start_date).days
+    if date_diff < 365:
+        st.warning("⚠️ For accurate results, please select a date range of at least 1 year.")
+
 # --- Results ---
 if st.session_state.result:
     result     = st.session_state.result
