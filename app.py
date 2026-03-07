@@ -184,14 +184,17 @@ if st.session_state.result:
         )
         st.plotly_chart(fig_frontier, use_container_width=True)
 
-        st.subheader("📊 Historical Normalized Prices")
-if price_data is None or price_data.empty or len(price_data) < 2:
-    st.warning("Not enough price data to display. Try a wider date range.")
-else:
-    normalized = (price_data / price_data.iloc[0]) * 100
-    fig_prices = px.line(normalized, title="Normalized Price History")
-    fig_prices.update_layout(yaxis_title="Value (Starting = $100)")
-    st.plotly_chart(fig_prices, use_container_width=True)
+    st.subheader("📊 Historical Normalized Prices")
+try:
+    if st.session_state.price_data is None or st.session_state.price_data.empty or len(st.session_state.price_data) < 2:
+        st.warning("Not enough price data to display. Try a wider date range.")
+    else:
+        normalized = (st.session_state.price_data / st.session_state.price_data.iloc[0]) * 100
+        fig_prices = px.line(normalized, title="Normalized Price History")
+        fig_prices.update_layout(yaxis_title="Value (Starting = $100)")
+        st.plotly_chart(fig_prices, use_container_width=True)
+except Exception as e:
+    st.warning("Could not display normalized prices. Try a different date range.")
 
     # ── Tab 2: Risk Scores ────────────────────────────────────────────────────
     with tab2:
