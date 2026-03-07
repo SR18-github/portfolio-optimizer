@@ -78,12 +78,12 @@ st.divider()
 
 # --- Settings ---
 st.subheader("⚙️ Settings")
-st.caption("📅 Please enter a start and end date for your portfolio analysis.")
+st.caption("📅 Please select a start and end date for your portfolio analysis.")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    start_date = st.date_input("Start Date 📅", value=None, placeholder="Select a start date...")
+    start_date = st.date_input("Start Date 📅", value=None)
 with col2:
-    end_date = st.date_input("End Date 📅", value=None, placeholder="Select an end date...")
+    end_date = st.date_input("End Date 📅", value=None)
 with col3:
     num_portfolios = st.slider("Simulated Portfolios", 1000, 10000, 5000, 500)
 with col4:
