@@ -16,12 +16,12 @@ from utils.analytics import (
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="Portfolio Optimizer",
+    page_title="Portfolio Optimization Tool",
     page_icon="📈",
     layout="wide"
 )
 
-st.title("📈 Mean Variance Portfolio Optimizer")
+st.title("📈 Portfolio Optimization Tool")
 st.markdown("Search and add assets by name or ticker, then optimize your portfolio.")
 
 # --- Session State ---
@@ -44,7 +44,7 @@ search_query = st.text_input(
 if search_query:
     suggestions = search_tickers(search_query)
     if suggestions:
-        st.markdown("**Click an asset to add it:**")
+        st.markdown("Search and add assets by name or ticker, then optimize your portfolio.")
         cols = st.columns(2)
         for i, (ticker, name) in enumerate(suggestions):
             with cols[i % 2]:
