@@ -195,3 +195,36 @@ def rebalancing_suggestions(
     )
 
     return df
+
+def extend_prices_to_future(price_data: pd.DataFrame, end_date) -> tuple:
+    """
+    If end_date is in the future, extends price_data with ARIMA forecasts.
+    Returns (extended_price_data, is_forecasted, forecast_days)
+    """
+    today = pd.Timestamp("today").normalize()
+    end = pd.Timestamp(end_date)
+
+    if end <= today:
+        return price_data, False, 0
+
+    future_days = len(pd.bdate_range(start=today, end=end))
+
+    if future_days <= 0:
+        return price_data, False, 0
+
+    forecasts = forecast_prices(price_data, days=future_days)
+
+    extended_frames = []
+    for ticker in price_data.columns:
+        historical = price_data[ticker]
+        if forecasts.get(ticker) is not None:
+            combined = pd.concat([historical, forecasts[ticker]])
+            extended_frames.append(combined)
+        else:
+            extended_frames.append(historical)
+
+    extended_df = pd.concat(extended_frames, axis=1)
+    extended_df.columns = price_data.columns
+    extended_df = extended_df.dropna()
+
+    return extended_df, True, future_days
