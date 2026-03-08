@@ -11,7 +11,8 @@ from utils.analytics import (
     calculate_correlation,
     forecast_prices,
     monte_carlo_simulation,
-    rebalancing_suggestions
+    rebalancing_suggestions,
+    extend_prices_to_future
 )
 
 # --- Page Config ---
@@ -25,8 +26,6 @@ st.title("📈 Portfolio Optimization Tool")
 st.markdown("Search and add assets by name or ticker, then optimize your portfolio.")
 
 # --- Session State ---
-
-
 if "selected_tickers" not in st.session_state:
     st.session_state.selected_tickers = []
 if "result" not in st.session_state:
@@ -48,7 +47,7 @@ search_query = st.text_input(
 if search_query:
     suggestions = search_tickers(search_query)
     if suggestions:
-        st.markdown("Search and add assets by name or ticker, then optimize your portfolio.")
+        st.markdown("**Click an asset to add it:**")
         cols = st.columns(2)
         for i, (ticker, name) in enumerate(suggestions):
             with cols[i % 2]:
@@ -85,9 +84,9 @@ st.subheader("⚙️ Settings")
 st.caption("📅 Please select a start and end date for your portfolio analysis.")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    start_date = st.date_input("Start Date 📅", value=None)
+    start_date = st.date_input("Start Date 📅", value=pd.to_datetime("2022-01-01"))
 with col2:
-    end_date = st.date_input("End Date 📅", value=None)
+    end_date = st.date_input("End Date 📅", value=pd.to_datetime("today"))
 with col3:
     num_portfolios = st.slider("Simulated Portfolios", 1000, 10000, 5000, 500)
 with col4:
@@ -97,28 +96,28 @@ with col4:
 
 st.divider()
 
+# --- Validation ---
+if start_date and end_date:
+    if (end_date - start_date).days < 365:
+        st.warning("⚠️ For accurate results, please select a date range of at least 1 year.")
+
 # --- Optimize Button ---
 run_button = st.button(
     "🚀 Optimize Portfolio",
     use_container_width=True,
-    disabled=len(st.session_state.selected_tickers) < 2
+    disabled=len(st.session_state.selected_tickers) < 2 or not start_date or not end_date
 )
-
-if not start_date or not end_date:
-    st.caption("⚠️ Please select both a start and end date.")
-elif len(st.session_state.selected_tickers) < 2:
-    st.caption("⚠️ Add at least 2 assets to run optimization.")
 
 if len(st.session_state.selected_tickers) < 2:
     st.caption("⚠️ Add at least 2 assets to run optimization.")
 
+# --- Run Optimization ---
 if run_button:
-    if end_date > pd.Timestamp("today").date() and (end_date - start_date).days < 365:
-        st.error("❌ Please select a start date at least 1 year in the past for accurate forecasting.")
+    if start_date and end_date and (end_date - start_date).days < 365:
+        st.error("❌ Please select a date range of at least 1 year for accurate results.")
     else:
         with st.spinner("Fetching data and optimizing..."):
             try:
-                # Fetch real historical price data up to today
                 fetch_end = min(end_date, pd.Timestamp("today").date())
                 price_data = fetch_price_data(
                     st.session_state.selected_tickers,
@@ -126,14 +125,12 @@ if run_button:
                     str(fetch_end)
                 )
 
-                # Extend into future if needed
-                from utils.analytics import extend_prices_to_future
                 price_data, is_forecasted, forecast_days = extend_prices_to_future(
                     price_data, end_date
                 )
 
                 if is_forecasted:
-                    st.info(f"🔮 Your end date is in the future — {forecast_days} trading days of prices have been forecasted using ARIMA and blended with real historical data.")
+                    st.info(f"🔮 Your end date is in the future — {forecast_days} trading days have been forecasted using ARIMA and blended with real historical data.")
 
                 result = optimize_portfolio(price_data, num_portfolios=num_portfolios)
                 st.session_state.result = result
@@ -144,17 +141,11 @@ if run_button:
                 st.error(f"Something went wrong: {e}")
                 st.info("Double-check your ticker symbols and date range.")
 
-if start_date and end_date:
-    date_diff = (end_date - start_date).days
-    if date_diff < 365:
-        st.warning("⚠️ For accurate results, please select a date range of at least 1 year.")
-
 # --- Results ---
 if st.session_state.result:
-    result     = st.session_state.result
+    result = st.session_state.result
     price_data = st.session_state.price_data
 
-    # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🏆 Allocation",
         "⚠️ Risk Scores",
@@ -216,15 +207,15 @@ if st.session_state.result:
         )
         st.plotly_chart(fig_frontier, use_container_width=True)
 
-st.subheader("📊 Historical Normalized Prices")
-try:
-    if st.session_state.price_data is not None and not st.session_state.price_data.empty and len(st.session_state.price_data) >= 2:
-        normalized = (st.session_state.price_data / st.session_state.price_data.iloc[0]) * 100
-        fig_prices = px.line(normalized, title="Normalized Price History")
-        fig_prices.update_layout(yaxis_title="Value (Starting = $100)")
-        st.plotly_chart(fig_prices, use_container_width=True)
-except Exception:
-    pass
+        st.subheader("📊 Historical Normalized Prices")
+        try:
+            if price_data is not None and not price_data.empty and len(price_data) >= 2:
+                normalized = (price_data / price_data.iloc[0]) * 100
+                fig_prices = px.line(normalized, title="Normalized Price History")
+                fig_prices.update_layout(yaxis_title="Value (Starting = $100)")
+                st.plotly_chart(fig_prices, use_container_width=True)
+        except Exception:
+            pass
 
     # ── Tab 2: Risk Scores ────────────────────────────────────────────────────
     with tab2:
@@ -235,11 +226,9 @@ except Exception:
         - **VaR 95%** — on a bad day, you'd expect to lose at least this much
         - **Risk Score** — 1 (very safe) to 10 (very risky)
         """)
-
         risk_df = calculate_risk_metrics(price_data)
         st.dataframe(risk_df, use_container_width=True)
 
-        # Risk score bar chart
         risk_scores = calculate_risk_metrics(price_data).reset_index()
         fig_risk = px.bar(
             risk_scores, x="Ticker", y="Risk Score",
@@ -257,7 +246,6 @@ except Exception:
         - **0.0** = no relationship
         - **-1.0** = move in opposite directions (great for diversification!)
         """)
-
         corr_matrix = calculate_correlation(price_data)
         fig_heatmap = px.imshow(
             corr_matrix,
@@ -303,10 +291,7 @@ except Exception:
     # ── Tab 5: Monte Carlo ────────────────────────────────────────────────────
     with tab5:
         st.subheader("🎲 Monte Carlo Future Simulation")
-        st.markdown(f"""
-        Simulates **1,000 possible futures** for your optimized portfolio
-        over the next trading year based on historical return patterns.
-        """)
+        st.markdown("Simulates **1,000 possible futures** for your optimized portfolio over the next trading year.")
 
         mc = monte_carlo_simulation(
             price_data,
@@ -314,9 +299,8 @@ except Exception:
             initial_investment=initial_investment
         )
 
-        # Plot subset of simulation paths
         fig_mc = go.Figure()
-        for i in range(0, 1000, 10):  # plot every 10th path to keep it clean
+        for i in range(0, 1000, 10):
             fig_mc.add_trace(go.Scatter(
                 y=mc["simulations"][:, i],
                 mode="lines",
@@ -325,7 +309,6 @@ except Exception:
                 opacity=0.3
             ))
 
-        # Add median path
         median_path = np.median(mc["simulations"], axis=1)
         fig_mc.add_trace(go.Scatter(
             y=median_path,
@@ -333,7 +316,6 @@ except Exception:
             line=dict(color="blue", width=2),
             name="Median"
         ))
-
         fig_mc.update_layout(
             title="Monte Carlo Portfolio Simulation (1 Year)",
             xaxis_title="Trading Days",
@@ -342,14 +324,10 @@ except Exception:
         st.plotly_chart(fig_mc, use_container_width=True)
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💰 Initial Investment",
-                    f"${initial_investment:,.0f}")
-        col2.metric("📈 Median Outcome",
-                    f"${mc['median_final']:,.0f}")
-        col3.metric("🐻 Worst 5% Case",
-                    f"${mc['percentile_5']:,.0f}")
-        col4.metric("🚀 Best 95% Case",
-                    f"${mc['percentile_95']:,.0f}")
+        col1.metric("💰 Initial Investment", f"${initial_investment:,.0f}")
+        col2.metric("📈 Median Outcome", f"${mc['median_final']:,.0f}")
+        col3.metric("🐻 Worst 5% Case", f"${mc['percentile_5']:,.0f}")
+        col4.metric("🚀 Best 95% Case", f"${mc['percentile_95']:,.0f}")
 
     # ── Tab 6: Rebalancing ────────────────────────────────────────────────────
     with tab6:
@@ -358,7 +336,6 @@ except Exception:
         Compares an **equal-weighted** starting portfolio against the
         **optimal weights** and tells you exactly what to buy or sell.
         """)
-
         rebal_df = rebalancing_suggestions(
             result["tickers"],
             result["optimal_weights"],
