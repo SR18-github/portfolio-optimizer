@@ -56,7 +56,6 @@ def calculate_correlation(price_data: pd.DataFrame) -> pd.DataFrame:
 
 
 # ── 3. PRICE FORECASTING ──────────────────────────────────────────────────────
-
 def forecast_prices(price_data: pd.DataFrame, days: int = 30) -> dict:
     """
     Forecasts future prices for each asset using ARIMA.
@@ -73,10 +72,10 @@ def forecast_prices(price_data: pd.DataFrame, days: int = 30) -> dict:
             fitted = model.fit()
 
             # Forecast
-            forecast = fitted.forecast(steps=days)
+            forecast_result = fitted.forecast(steps=days)
             last_date = series.index[-1]
             future_dates = pd.date_range(start=last_date, periods=days + 1, freq="B")[1:]
-            forecasts[ticker] = pd.Series(forecast.values, index=future_dates)
+            forecasts[ticker] = pd.Series(forecast_result.values, index=future_dates)
 
         except Exception:
             forecasts[ticker] = None
@@ -84,6 +83,41 @@ def forecast_prices(price_data: pd.DataFrame, days: int = 30) -> dict:
     return forecasts
 
 
+def extend_prices_to_future(price_data: pd.DataFrame, end_date) -> tuple:
+    """
+    If end_date is in the future, extends price_data with ARIMA forecasts.
+    Returns (extended_price_data, is_forecasted, forecast_days)
+    """
+    import pandas as pd
+    today = pd.Timestamp("today").normalize()
+    end = pd.Timestamp(end_date)
+
+    if end <= today:
+        return price_data, False, 0
+
+    # Calculate business days into the future
+    future_days = len(pd.bdate_range(start=today, end=end))
+
+    if future_days <= 0:
+        return price_data, False, 0
+
+    # Forecast each ticker
+    forecasts = forecast_prices(price_data, days=future_days)
+
+    extended_frames = []
+    for ticker in price_data.columns:
+        historical = price_data[ticker]
+        if forecasts.get(ticker) is not None:
+            combined = pd.concat([historical, forecasts[ticker]])
+            extended_frames.append(combined)
+        else:
+            extended_frames.append(historical)
+
+    extended_df = pd.concat(extended_frames, axis=1)
+    extended_df.columns = price_data.columns
+    extended_df = extended_df.dropna()
+
+    return extended_df, True, future_days
 # ── 4. MONTE CARLO FUTURE SIMULATION ─────────────────────────────────────────
 
 def monte_carlo_simulation(

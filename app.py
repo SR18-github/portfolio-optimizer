@@ -25,12 +25,16 @@ st.title("📈 Portfolio Optimization Tool")
 st.markdown("Search and add assets by name or ticker, then optimize your portfolio.")
 
 # --- Session State ---
+
+
 if "selected_tickers" not in st.session_state:
     st.session_state.selected_tickers = []
 if "result" not in st.session_state:
     st.session_state.result = None
 if "price_data" not in st.session_state:
     st.session_state.price_data = None
+if "is_forecasted" not in st.session_state:
+    st.session_state.is_forecasted = False
 
 # --- Search Section ---
 st.subheader("🔍 Search & Add Assets")
@@ -109,19 +113,36 @@ if len(st.session_state.selected_tickers) < 2:
     st.caption("⚠️ Add at least 2 assets to run optimization.")
 
 if run_button:
-    with st.spinner("Fetching data and optimizing..."):
-        try:
-            price_data = fetch_price_data(
-                st.session_state.selected_tickers,
-                str(start_date),
-                str(end_date)
-            )
-            result = optimize_portfolio(price_data, num_portfolios=num_portfolios)
-            st.session_state.result = result
-            st.session_state.price_data = price_data
-        except Exception as e:
-            st.error(f"Something went wrong: {e}")
-            st.info("Double-check your ticker symbols and date range.")
+    if end_date > pd.Timestamp("today").date() and (end_date - start_date).days < 365:
+        st.error("❌ Please select a start date at least 1 year in the past for accurate forecasting.")
+    else:
+        with st.spinner("Fetching data and optimizing..."):
+            try:
+                # Fetch real historical price data up to today
+                fetch_end = min(end_date, pd.Timestamp("today").date())
+                price_data = fetch_price_data(
+                    st.session_state.selected_tickers,
+                    str(start_date),
+                    str(fetch_end)
+                )
+
+                # Extend into future if needed
+                from utils.analytics import extend_prices_to_future
+                price_data, is_forecasted, forecast_days = extend_prices_to_future(
+                    price_data, end_date
+                )
+
+                if is_forecasted:
+                    st.info(f"🔮 Your end date is in the future — {forecast_days} trading days of prices have been forecasted using ARIMA and blended with real historical data.")
+
+                result = optimize_portfolio(price_data, num_portfolios=num_portfolios)
+                st.session_state.result = result
+                st.session_state.price_data = price_data
+                st.session_state.is_forecasted = is_forecasted
+
+            except Exception as e:
+                st.error(f"Something went wrong: {e}")
+                st.info("Double-check your ticker symbols and date range.")
 
 if start_date and end_date:
     date_diff = (end_date - start_date).days
